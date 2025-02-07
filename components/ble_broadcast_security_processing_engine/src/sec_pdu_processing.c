@@ -9,6 +9,8 @@
 #include "crypto.h"
 #include "test.h"
 
+#include "adv_time_authorize.h"
+
 #include "beacon_test_pdu.h"
 
 #include "tasks_data.h"
@@ -85,6 +87,23 @@ void reset_processing()
 {
 }
 
+static void check_and_get_consumer(esp_bd_addr_t mac_address, ble_consumer * p_ble_consumer)
+{
+    p_ble_consumer = get_ble_consumer_from_collection(sec_pdu_st.consumer_collection, mac_address);
+    if (p_ble_consumer == NULL && get_active_no_consumers(sec_pdu_st.consumer_collection) < MAX_BLE_CONSUMERS)
+    {
+        p_ble_consumer = add_consumer_to_collection(sec_pdu_st.consumer_collection, mac_address);
+        if (p_ble_consumer == NULL)
+        {
+            ESP_LOGE(SEC_PDU_PROC_LOG, "Failed adding new consumer to collection :(");
+        }
+        else
+        {
+            ESP_LOGI(SEC_PDU_PROC_LOG, "Successfully addded consumer to collection, count of active consumers: %i", get_active_no_consumers(sec_pdu_st.consumer_collection)); 
+        }
+    }
+}
+
 bool create_ble_broadcast_pdu_for_dispatcher(ble_broadcast_pdu* pdu, uint8_t *data, size_t size, esp_bd_addr_t mac_address)
 {
     bool result = false;
@@ -148,19 +167,7 @@ void handle_event_new_pdu()
 
     for (int i = 0; i < batchCount; i++)
     {
-        p_ble_consumer = get_ble_consumer_from_collection(sec_pdu_st.consumer_collection, pduBatch[i].mac_address);
-        if (p_ble_consumer == NULL && get_active_no_consumers(sec_pdu_st.consumer_collection) < MAX_BLE_CONSUMERS)
-        {
-            p_ble_consumer = add_consumer_to_collection(sec_pdu_st.consumer_collection, pduBatch[i].mac_address);
-            if (p_ble_consumer == NULL)
-            {
-                ESP_LOGE(SEC_PDU_PROC_LOG, "Failed adding new consumer to collection :(");
-            }
-            else
-            {
-                ESP_LOGI(SEC_PDU_PROC_LOG, "Successfully addded consumer to collection, count of active consumers: %i", get_active_no_consumers(sec_pdu_st.consumer_collection)); 
-            }
-        }
+        check_and_get_consumer(pduBatch[i].mac_address, p_ble_consumer);
 
         if (p_ble_consumer == NULL)
         {
@@ -168,24 +175,50 @@ void handle_event_new_pdu()
             continue;
         }
 
-        uint16_t key_id = get_key_id_from_key_session_data(pduBatch[i].pdu.bcd.key_session_data);
-        uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pduBatch[i].pdu.bcd.key_session_data);
+        command cmd = get_command_from_pdu(pduBatch[i].data, pduBatch[i].size);
 
-        key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
-        if (key == NULL ) {
-            queue_key_for_reconstruction(key_id, key_fragment_index, 
-                                        pduBatch[i].pdu.bcd.enc_key_fragment, pduBatch[i].pdu.bcd.key_fragment_hmac, 
-                                        pduBatch[i].pdu.bcd.xor_seed, pduBatch[i].mac_address);
-            add_to_consumer_deferred_queue(p_ble_consumer, &(pduBatch[i].pdu));
-        }
-        else if (is_pdu_in_deferred_queue(p_ble_consumer) > 0)
+        switch (cmd)
         {
-            add_to_consumer_deferred_queue(p_ble_consumer, &(pduBatch[i].pdu));
-        }
-        else
-        {
-            decrypt_and_notify(key, &pduBatch[i].pdu, pduBatch[i].mac_address);
-        }
+            case DATA_CMD:
+            {
+                beacon_pdu_data pdu;
+                get_beacon_pdu_from_adv_data(&pdu, pduBatch[i].data, pduBatch[i].size);
+                uint16_t key_id = get_key_id_from_key_session_data(pdu.key_session_data);
+                key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
+                if (key == NULL)
+                {
+                    add_to_consumer_deferred_queue(p_ble_consumer, &pdu);
+                }
+                else if (is_pdu_in_deferred_queue(p_ble_consumer) > 0)
+                {
+                    add_to_consumer_deferred_queue(p_ble_consumer, &pdu);
+                }
+                else
+                {
+                    decrypt_and_notify(key, &pdu, pduBatch[i].mac_address);
+                }
+            }
+            break;
+
+            case KEY_FRAGMENT_CMD:
+            {
+                beacon_key_pdu_data * pdu = (beacon_key_pdu_data *) pduBatch[i].data;
+                uint16_t key_id = get_key_id_from_key_session_data(pdu->bcd.key_session_data);
+                uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pdu->bcd.key_session_data);
+                key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
+                if (key == NULL)
+                {
+                    queue_key_for_reconstruction(key_id, key_fragment_index, 
+                        pdu->bcd.enc_key_fragment, pdu->bcd.key_fragment_hmac, 
+                        pdu->bcd.xor_seed, pduBatch[i].mac_address);
+                }
+            }
+            break;
+
+            default:
+                break;
+
+        };
             
     }
 }
@@ -232,7 +265,7 @@ void decrypt_pdu(const key_128b * const key, beacon_pdu_data * pdu, uint8_t * ou
     if (output_len == MAX_PDU_PAYLOAD_SIZE)
     {
         uint8_t nonce[NONCE_SIZE] = {0};
-        build_nonce(nonce, &(pdu->marker), pdu->bcd.key_session_data, pdu->bcd.xor_seed);
+        build_nonce(nonce, &(pdu->marker), pdu->key_session_data, pdu->xor_seed);
         aes_ctr_decrypt_payload(pdu->payload, pdu->payload_size, key->key, nonce, output);
     }
 }
@@ -245,13 +278,13 @@ int process_deferred_queue(ble_consumer * p_ble_consumer)
         counter++;
     }
     
-    uint16_t last_key_id = get_key_id_from_key_session_data(pduBatch[0].bcd.key_session_data);
+    uint16_t last_key_id = get_key_id_from_key_session_data(pduBatch[0].key_session_data);
     const key_128b *key = get_key_from_cache(p_ble_consumer->context.key_cache, last_key_id);
 
     for (int i = 0; i < counter; i++)
     {
-        uint16_t key_id = get_key_id_from_key_session_data(pduBatch[i].bcd.key_session_data);
-        uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pduBatch[i].bcd.key_session_data);
+        uint16_t key_id = get_key_id_from_key_session_data(pduBatch[i].key_session_data);
+        uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pduBatch[i].key_session_data);
 
         if (last_key_id != key_id)
         {
@@ -415,6 +448,8 @@ int start_up_sec_processing()
 
     status = init_sec_processing_resources();
 
+    status = init_adv_time_authorize_object();
+
     if (status == 0)
     {
         int key_reconstructor_status = start_up_key_reconstructor(MAX_BLE_CONSUMERS * 10);
@@ -480,28 +515,4 @@ int enqueue_pdu_for_processing(uint8_t* data, size_t size, esp_bd_addr_t mac_add
     }
 
     return stats;
-}
-
-void scan_complete_callback(int64_t timestamp_us, uint8_t *data, size_t data_size, esp_bd_addr_t mac_address)
-{
-    if (data != NULL)
-    {
-        if (is_pdu_in_beacon_pdu_format(data, data_size))
-        {
-            beacon_pdu_data pdu = {0};
-            size_t payload_size = get_payload_size_from_pdu(data_size);
-            memcpy(&pdu.marker, data, sizeof(beacon_marker));
-            memcpy(&pdu.bcd, &data[sizeof(beacon_marker)], sizeof(beacon_crypto_data));
-            memcpy(pdu.payload, &data[sizeof(beacon_marker) + sizeof(beacon_crypto_data)], payload_size);
-            pdu.payload_size = payload_size;
-            enqueue_pdu_for_processing(&pdu, mac_address);
-        }
-        else
-        {
-            if (is_pdu_from_expected_sender(mac_address) == true && is_test_pdu(data, data_size) != false)
-            {
-                test_log_bad_structure_packet(mac_address);
-            }
-        }
-    }
 }

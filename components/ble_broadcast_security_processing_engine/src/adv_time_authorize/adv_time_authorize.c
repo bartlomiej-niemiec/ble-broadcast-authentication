@@ -5,6 +5,8 @@
 #include "beacon_pdu_data.h"
 #include "tasks_data.h"
 
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
@@ -33,10 +35,6 @@ typedef struct {
 } scan_pdu;
 
 typedef struct {
-    uint8_t consumer_index;
-} authorize_event;
-
-typedef struct {
     esp_bd_addr_t consumer_addr;
     scan_pdu last_processed_pdu;
     QueueHandle_t privateQueue;
@@ -54,7 +52,7 @@ static adv_time_authorize_structure ao_control_structure;
 static esp_bd_addr_t zero_address_init = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 void adv_authorize_main(void *arg);
-uint8_t get_consumer_index_for_addr(esp_bd_addr_t mac_address);
+int get_consumer_index_for_addr(esp_bd_addr_t mac_address);
 bool init_consumer_authorization_structure(consumer_authorization_structure *st);
 uint32_t get_no_messages_in_queue(QueueHandle_t queue);
 void process_authorization_for_consumer(uint8_t consumer_index);
@@ -68,19 +66,22 @@ bool init_consumer_authorization_structure(consumer_authorization_structure *st)
     if (st->privateQueue == NULL)
     {
         ESP_LOGI(ADV_AUTHORIZE_LOG, "Private Queue init failed");
+        return false;
     }
+
+    return true;
 }
 
 bool init_adv_time_authorize_object()
 {
-    static is_initialized_alread = false;
+    static bool is_initialized_alread = false;
 
     if (is_initialized_alread == false)
     {
         for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
         {
             bool result_consumer = init_consumer_authorization_structure(&ao_control_structure.consumers[i]);
-            if (result_consumer = false)
+            if (result_consumer == false)
             {
                 return is_initialized_alread;
             }
@@ -122,10 +123,10 @@ bool init_adv_time_authorize_object()
     return is_initialized_alread;
 }
 
-uint8_t get_consumer_index_for_addr(esp_bd_addr_t mac_address)
+int get_consumer_index_for_addr(esp_bd_addr_t mac_address)
 {
-    uint8_t index = -1;
-    uint8_t free_arr_index = -1;
+    int index = -1;
+    int free_arr_index = -1;
     if (xSemaphoreTake(ao_control_structure.xMutex, MAX_BLOCK_TIME_TICKS) == pdPASS)
     {
         for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
@@ -201,7 +202,7 @@ void process_authorization_for_consumer(const uint8_t consumer_index)
     }
     
 
-    for (int i = 1; i < batchCount; i++)
+    for (int i = start_index; i < batchCount; i++)
     {
         if (pdus[i].key_id == prev_scanned_pdu.key_id)
         {
@@ -236,14 +237,14 @@ void scan_complete_callback(int64_t timestamp_us, uint8_t *data, size_t data_siz
     {
         if (is_pdu_in_beacon_pdu_format(data, data_size))
         {
-            uint8_t consumer_index = get_consumer_index_for_addr(mac_address);
+            int consumer_index = get_consumer_index_for_addr(mac_address);
             if (consumer_index >= 0)
             {
                 scan_pdu pdu;
                 memcpy(pdu.data, data, data_size);
                 pdu.timestamp_us = timestamp_us;
-                memcpy(&(pdu.pdu_no), data[PDU_NO_OFFSET], sizeof(uint16_t));
-                memcpy(&(pdu.key_id), data[KEY_SESSION_OFFSET], sizeof(uint16_t));
+                memcpy(&(pdu.pdu_no), &(data[PDU_NO_OFFSET]), sizeof(uint16_t));
+                memcpy(&(pdu.key_id), &(data[KEY_SESSION_OFFSET]), sizeof(uint16_t));
                 pdu.size = data_size;
                 uint16_t key_id = get_key_id_from_key_session_data(pdu.key_id);
                 pdu.key_id = key_id;
@@ -271,13 +272,6 @@ void scan_complete_callback(int64_t timestamp_us, uint8_t *data, size_t data_siz
                     ao_control_structure.consumers->last_pdu_key_id = pdu.key_id;
                 }
 
-            }
-        }
-        else
-        {
-            if (is_pdu_from_expected_sender(mac_address) == true && is_test_pdu(data, data_size) != false)
-            {
-                test_log_bad_structure_packet(mac_address);
             }
         }
     }

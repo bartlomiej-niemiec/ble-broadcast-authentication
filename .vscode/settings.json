@@ -9,7 +9,7 @@
     },
     "idf.espIdfPathWin": "C:\\esp-idf",
     "idf.openOcdConfigs": [
-        "board/esp32s3-builtin.cfg"
+        "board/esp32-wrover-kit-3.3v.cfg"
     ],
     "idf.portWin": "COM4",
     "idf.pythonBinPathWin": "C:\\esp-idf-tools\\python_env\\idf5.4_py3.11_env\\Scripts\\python.exe",

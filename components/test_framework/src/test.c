@@ -79,6 +79,7 @@ typedef struct {
 } test_packet_structure;
 static const TickType_t TEST_QUEUE_WAIT_SYSTICKS = pdMS_TO_TICKS(50);
 
+static uint32_t counter = 0;
 
 bool is_data_decoded_valid(uint8_t * data, size_t data_size)
 {
@@ -382,7 +383,6 @@ void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_
         ESP_LOGE(TEST_ESP_LOG_GROUP, "Passed PDU Data or Mac Addrr is NULL");
         return;
     }
-    static uint32_t counter = 0;
     int index = -1;
     if ((index = get_consumer_index(mac_address)) >= 0)
     {
@@ -449,7 +449,16 @@ void test_log_packet_send(uint8_t *data, size_t data_len, esp_bd_addr_t mac_addr
         ESP_LOGE(TEST_ESP_LOG_GROUP, "Passed PDU Data or Mac Addrr is NULL");
         return;
     }
-    static uint32_t counter = 0;
+    ++ble_test_producer.total_packets_send;
+    if (ble_test_producer.total_packets_send % PACKET_CONST_COUNTER == 0)
+    {
+        counter++;
+        ESP_LOGI(TEST_ESP_LOG_GROUP, "%lu Packet has been sent!", (uint32_t) (counter * PACKET_CONST_COUNTER));
+    }
+}
+
+void test_log_key_fragment_send()
+{
     ++ble_test_producer.total_packets_send;
     if (ble_test_producer.total_packets_send % PACKET_CONST_COUNTER == 0)
     {

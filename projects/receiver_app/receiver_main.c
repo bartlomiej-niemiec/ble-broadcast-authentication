@@ -4,6 +4,7 @@
 #include "beacon_pdu_data.h"
 #include "beacon_test_pdu.h"
 #include "sec_pdu_processing.h"
+#include "sec_pdu_processing_scan_callback.h"
 #include "ble_broadcast_controller.h"
 #include "test.h"
 

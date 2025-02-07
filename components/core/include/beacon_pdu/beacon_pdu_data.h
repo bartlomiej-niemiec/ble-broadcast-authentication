@@ -30,6 +30,7 @@ typedef struct {
     command cmd;
     uint16_t pdu_no;
     uint16_t key_session_data;
+    uint8_t xor_seed;
     uint8_t payload[MAX_PDU_PAYLOAD_SIZE];
     size_t payload_size;
 }__attribute__((packed)) beacon_pdu_data;
@@ -45,7 +46,11 @@ typedef struct {
 
 size_t get_beacon_pdu_data_len(beacon_pdu_data * pdu);
 
+size_t get_beacon_key_pdu_data_len();
+
 size_t get_payload_size_from_pdu(size_t total_pdu_len);
+
+bool get_beacon_pdu_from_adv_data(beacon_pdu_data * pdu, uint8_t *data, size_t size);
 
 command get_command_from_pdu(uint8_t *data, size_t size); 
 
@@ -54,6 +59,8 @@ esp_err_t build_beacon_pdu_data (uint16_t key_session_data, uint8_t* payload, si
 esp_err_t build_beacon_key_pdu_data (beacon_crypto_data* bcd, beacon_key_pdu_data *bpd);
 
 esp_err_t fill_marker_in_pdu(beacon_pdu_data *bpd);
+
+esp_err_t fill_marker_in_key_pdu(beacon_key_pdu_data *bpd);
 
 bool is_pdu_in_beacon_pdu_format(uint8_t *data, size_t size);
 

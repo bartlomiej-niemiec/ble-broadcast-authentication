@@ -35,6 +35,16 @@ esp_err_t build_beacon_key_pdu_data (beacon_crypto_data* bcd, beacon_key_pdu_dat
     return ESP_OK;
 }
 
+bool get_beacon_pdu_from_adv_data(beacon_pdu_data * pdu, uint8_t *data, size_t size)
+{
+    if (pdu == NULL || data == NULL)
+        return false;
+
+    memcpy(pdu, data, size);
+    pdu->payload_size = get_payload_size_from_pdu(size);
+    return true;
+}
+
 command get_command_from_pdu(uint8_t *data, size_t size)
 {
     command cmd = 255;
@@ -82,6 +92,16 @@ bool is_pdu_in_beacon_pdu_format(uint8_t *data, size_t size)
 }
 
 esp_err_t fill_marker_in_pdu(beacon_pdu_data *bpd)
+{
+    if ((bpd == NULL)){
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memcpy(&(bpd->marker), &my_marker, sizeof(beacon_marker));
+    return ESP_OK;
+}
+
+esp_err_t fill_marker_in_key_pdu(beacon_key_pdu_data *bpd)
 {
     if ((bpd == NULL)){
         return ESP_ERR_INVALID_ARG;
@@ -139,6 +159,11 @@ size_t get_beacon_pdu_data_len(beacon_pdu_data * pdu)
     return (sizeof(pdu->key_session_data) + sizeof(pdu->marker) + pdu->payload_size + sizeof(pdu->cmd));
 }
 
+size_t get_beacon_key_pdu_data_len()
+{
+    return (sizeof(beacon_key_pdu_data));
+}
+
 uint16_t produce_key_session_data(uint16_t key_id, uint8_t key_fragment)
 {
     if (key_fragment > 3)
@@ -164,14 +189,12 @@ uint8_t produce_key_exchange_data(uint8_t pdu_time_interval_ms, uint8_t key_exch
 
 size_t get_payload_size_from_pdu(size_t total_pdu_len)
 {
-    return (total_pdu_len - (sizeof(uint16_t) + sizeof(command) + MARKER_STRUCT_SIZE + sizeof(uint16_t)));
+    return (total_pdu_len - (sizeof(uint16_t) + sizeof(command) + sizeof(uint16_t) + MARKER_STRUCT_SIZE));
 }
 
 uint32_t get_adv_interval_from_key_id(uint16_t key_id)
 {
-    static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
-    static const uint16_t MIN_KEY_ID_VAL = 0x0000;
-
-
-    
+    // static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
+    // static const uint16_t MIN_KEY_ID_VAL = 0x0000;
+    return 0U;
 }
