@@ -106,14 +106,11 @@ void data_set_success_cb()
     no_send_pdus++;
 }
 
-
 void packet_send_timeout_timer(void *arg)
 {
-    int64_t timestamp_prev = esp_timer_get_time();
-
     if (packet_send_counter >= NO_PACKET_TO_SEND)
     {
-        return;
+        return;  // Stop execution if all packets are sent
     }
 
     bool result;
@@ -126,10 +123,13 @@ void packet_send_timeout_timer(void *arg)
         result = encrypt_new_payload();
     }
 
-    uint32_t delay_ms = get_time_interval_for_current_session_key();
+    uint64_t delay_us = (uint64_t) (get_time_interval_for_current_session_key() * 1000); // Convert to microseconds
 
-    uint64_t next_call_time = ((esp_timer_get_time() - timestamp_prev)) - (delay_ms * 1000);
-    esp_timer_start_once(xPacketSendTimeoutTimer, next_call_time);
+    // Stop the timer before restarting it
+    esp_timer_stop(xPacketSendTimeoutTimer);
+
+    // Schedule next execution
+    esp_timer_start_once(xPacketSendTimeoutTimer, delay_us);
 }
 
 static esp_timer_create_args_t packetSendTimeoutTimer = {
