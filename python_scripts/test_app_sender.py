@@ -5,17 +5,17 @@ import csv
 import queue
 
 SERIAL_PORT_CONFIG = {
-    'port': 'COM7',
+    'port': 'COM3',
     'baudrate': 115200,
     'bytesize': serial.EIGHTBITS,
     'stopbits': serial.STOPBITS_ONE,
     'parity': serial.PARITY_NONE
 }
 
-FILENAME = "test_sender"
+FILENAME = "test_sender_algorithm_v2"
 TIMESTR = time.strftime("%Y%m%d_%H%M%S")
 PAYLOAD_SIZE = "10_bytes"
-INTERVAL = "multi_dynamic_20_200"
+INTERVAL = "based_on_key_id"
 LOGFILEPATH = FILENAME + "_" + TIMESTR + "_" + PAYLOAD_SIZE + "_" + INTERVAL + "ms" + ".txt"
 
 MAX_Q_SIZE = 20

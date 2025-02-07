@@ -61,7 +61,7 @@ static sec_pdu_processing_control sec_pdu_st = {
 };
 
 typedef struct {
-    uint8_t* data;
+    uint8_t data[MAX_GAP_DATA_LEN];
     size_t size;
     esp_bd_addr_t mac_address;
 } beacon_pdu_data_with_mac_addr;
@@ -85,23 +85,6 @@ static void log_processing_queue_size()
 
 void reset_processing()
 {
-}
-
-static void check_and_get_consumer(esp_bd_addr_t mac_address, ble_consumer * p_ble_consumer)
-{
-    p_ble_consumer = get_ble_consumer_from_collection(sec_pdu_st.consumer_collection, mac_address);
-    if (p_ble_consumer == NULL && get_active_no_consumers(sec_pdu_st.consumer_collection) < MAX_BLE_CONSUMERS)
-    {
-        p_ble_consumer = add_consumer_to_collection(sec_pdu_st.consumer_collection, mac_address);
-        if (p_ble_consumer == NULL)
-        {
-            ESP_LOGE(SEC_PDU_PROC_LOG, "Failed adding new consumer to collection :(");
-        }
-        else
-        {
-            ESP_LOGI(SEC_PDU_PROC_LOG, "Successfully addded consumer to collection, count of active consumers: %i", get_active_no_consumers(sec_pdu_st.consumer_collection)); 
-        }
-    }
 }
 
 bool create_ble_broadcast_pdu_for_dispatcher(ble_broadcast_pdu* pdu, uint8_t *data, size_t size, esp_bd_addr_t mac_address)
@@ -167,7 +150,19 @@ void handle_event_new_pdu()
 
     for (int i = 0; i < batchCount; i++)
     {
-        check_and_get_consumer(pduBatch[i].mac_address, p_ble_consumer);
+        p_ble_consumer = get_ble_consumer_from_collection(sec_pdu_st.consumer_collection, pduBatch[i].mac_address);
+        if (p_ble_consumer == NULL && get_active_no_consumers(sec_pdu_st.consumer_collection) < MAX_BLE_CONSUMERS)
+        {
+            p_ble_consumer = add_consumer_to_collection(sec_pdu_st.consumer_collection, pduBatch[i].mac_address);
+            if (p_ble_consumer == NULL)
+            {
+                ESP_LOGE(SEC_PDU_PROC_LOG, "Failed adding new consumer to collection :(");
+            }
+            else
+            {
+                ESP_LOGI(SEC_PDU_PROC_LOG, "Successfully addded consumer to collection, count of active consumers: %i", get_active_no_consumers(sec_pdu_st.consumer_collection)); 
+            }
+        }
 
         if (p_ble_consumer == NULL)
         {
@@ -181,15 +176,12 @@ void handle_event_new_pdu()
         {
             case DATA_CMD:
             {
+                ESP_LOGE(SEC_PDU_PROC_LOG, "Received data packet");
                 beacon_pdu_data pdu;
                 get_beacon_pdu_from_adv_data(&pdu, pduBatch[i].data, pduBatch[i].size);
                 uint16_t key_id = get_key_id_from_key_session_data(pdu.key_session_data);
                 key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
-                if (key == NULL)
-                {
-                    add_to_consumer_deferred_queue(p_ble_consumer, &pdu);
-                }
-                else if (is_pdu_in_deferred_queue(p_ble_consumer) > 0)
+                if (key == NULL || is_pdu_in_deferred_queue(p_ble_consumer) > 0)
                 {
                     add_to_consumer_deferred_queue(p_ble_consumer, &pdu);
                 }
@@ -202,6 +194,7 @@ void handle_event_new_pdu()
 
             case KEY_FRAGMENT_CMD:
             {
+                ESP_LOGE(SEC_PDU_PROC_LOG, "Received key fragment packet");
                 beacon_key_pdu_data * pdu = (beacon_key_pdu_data *) pduBatch[i].data;
                 uint16_t key_id = get_key_id_from_key_session_data(pdu->bcd.key_session_data);
                 uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pdu->bcd.key_session_data);
@@ -448,7 +441,7 @@ int start_up_sec_processing()
 
     status = init_sec_processing_resources();
 
-    status = init_adv_time_authorize_object();
+    status = init_adv_time_authorize_object() == true? 0: 1;
 
     if (status == 0)
     {
@@ -502,8 +495,8 @@ int enqueue_pdu_for_processing(uint8_t* data, size_t size, esp_bd_addr_t mac_add
     {   
         if (data != NULL && mac_address != NULL)
         {
-            beacon_pdu_data_with_mac_addr temp_pdu;
-            memcpy(&(temp_pdu.data), data, size);
+            beacon_pdu_data_with_mac_addr temp_pdu = {0};
+            memcpy(temp_pdu.data, data, size);
             temp_pdu.size = size;
             memcpy(temp_pdu.mac_address, mac_address, sizeof(esp_bd_addr_t));
             stats = xQueueSend(sec_pdu_st.processingQueue, ( void * ) &temp_pdu, QUEUE_TIMEOUT_SYS_TICKS);

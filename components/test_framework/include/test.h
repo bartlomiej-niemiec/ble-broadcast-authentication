@@ -62,4 +62,6 @@ bool is_pdu_from_expected_sender(esp_bd_addr_t addr);
 
 void test_log_bad_structure_packet(esp_bd_addr_t addr);
 
+void test_log_adv_time_not_authorize(esp_bd_addr_t addr);
+
 #endif

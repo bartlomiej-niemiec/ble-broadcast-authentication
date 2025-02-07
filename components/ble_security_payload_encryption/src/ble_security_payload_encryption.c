@@ -31,7 +31,7 @@ void key_replacement_cb();
 
 static volatile uint16_t KEY_REPLACE_TIME_IN_S;
 static volatile uint32_t key_replacement_packet_counter = 200;
-static uint64_t encrypted_packet_counter = 0;
+static volatile uint64_t encrypted_packet_counter = 0;
 
 
 uint16_t get_current_key_id()

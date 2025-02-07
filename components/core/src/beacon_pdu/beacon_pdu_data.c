@@ -1,5 +1,6 @@
 #include "beacon_pdu/beacon_pdu_data.h"
 #include <string.h>
+#include <math.h>
 #include "esp_log.h"
 
 static const char* BEACON_PDU_GROUP = "BEACON_PDU_GROUP";
@@ -49,9 +50,17 @@ command get_command_from_pdu(uint8_t *data, size_t size)
 {
     command cmd = 255;
     
-    if (size < COMMAND_OFFSET)
+    if (data == NULL)
+    {
+        ESP_LOGI(BEACON_PDU_GROUP, "Nulltpr");
         return 255;
+    }
 
+    if (size < COMMAND_OFFSET)
+    {
+        return 255;
+    }
+    
     switch (data[COMMAND_OFFSET])
     {
         case DATA_CMD:
@@ -194,7 +203,18 @@ size_t get_payload_size_from_pdu(size_t total_pdu_len)
 
 uint32_t get_adv_interval_from_key_id(uint16_t key_id)
 {
-    // static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
-    // static const uint16_t MIN_KEY_ID_VAL = 0x0000;
-    return 0U;
+    static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
+    static const uint16_t MIN_KEY_ID_VAL = 0x0000;
+
+    // Scale key_id to the range of advertisement intervals
+    double raw_interval = MIN_ADV_TIME_MS + ((key_id * (MAX_ADV_TIME_MS - MIN_ADV_TIME_MS)) / (double)MAX_KEY_ID_VAL);
+
+    // Round to the nearest multiple of 80ms
+    uint16_t rounded_interval = (uint16_t)(round((raw_interval - MIN_ADV_TIME_MS) / SCALE_SINGLE_MS) * SCALE_SINGLE_MS + MIN_ADV_TIME_MS);
+
+    // Ensure the value is within bounds
+    if (rounded_interval < MIN_ADV_TIME_MS) return MIN_ADV_TIME_MS;
+    if (rounded_interval > MAX_ADV_TIME_MS) return MAX_ADV_TIME_MS;
+    
+    return (uint32_t) rounded_interval;
 }

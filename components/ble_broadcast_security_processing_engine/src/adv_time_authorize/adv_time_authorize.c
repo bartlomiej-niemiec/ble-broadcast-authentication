@@ -5,6 +5,8 @@
 #include "beacon_pdu_data.h"
 #include "tasks_data.h"
 
+#include "test.h"
+
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -23,8 +25,6 @@
 #define MAX_BLOCK_TIME_TICKS pdMS_TO_TICKS(50)
 
 #define ADV_AUTHORIZE_LOG "ADV_AUTHRORIZE"
-
-#define TOLERANCE_WINDOW_MS 20
 
 typedef struct {
     int64_t timestamp_us;
@@ -57,6 +57,7 @@ bool init_consumer_authorization_structure(consumer_authorization_structure *st)
 uint32_t get_no_messages_in_queue(QueueHandle_t queue);
 void process_authorization_for_consumer(uint8_t consumer_index);
 void save_last_scanned_pdu(scan_pdu *prev_scanned_pdu, scan_pdu *pdu);
+int get_tolerance_window_based_on_adv_interval(uint32_t adv_interval);
 
 bool init_consumer_authorization_structure(consumer_authorization_structure *st)
 {
@@ -127,29 +128,25 @@ int get_consumer_index_for_addr(esp_bd_addr_t mac_address)
 {
     int index = -1;
     int free_arr_index = -1;
-    if (xSemaphoreTake(ao_control_structure.xMutex, MAX_BLOCK_TIME_TICKS) == pdPASS)
+    for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
     {
-        for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
+        if (memcmp(ao_control_structure.consumers[i].consumer_addr, mac_address, sizeof(esp_bd_addr_t)) == 0)
         {
-            if (memcmp(ao_control_structure.consumers[i].consumer_addr, mac_address, sizeof(esp_bd_addr_t)) == 0)
-            {
-                index = i;
-                break;
-            }
-            else if (memcmp(ao_control_structure.consumers[i].consumer_addr, zero_address_init, sizeof(esp_bd_addr_t)) == 0)
-            {
-                free_arr_index = i;
-            }
+            index = i;
+            break;
         }
-
-        if (index == -1 && free_arr_index >= 0)
+        else if (memcmp(ao_control_structure.consumers[i].consumer_addr, zero_address_init, sizeof(esp_bd_addr_t)) == 0)
         {
-            memcpy(ao_control_structure.consumers[free_arr_index].consumer_addr, mac_address, sizeof(esp_bd_addr_t));
-            index = free_arr_index;
+            free_arr_index = i;
         }
-
-        xSemaphoreGive(ao_control_structure.xMutex);
     }
+
+    if (index == -1 && free_arr_index >= 0)
+    {
+        memcpy(ao_control_structure.consumers[free_arr_index].consumer_addr, mac_address, sizeof(esp_bd_addr_t));
+        index = free_arr_index;
+    }
+
     return index;
 }
 
@@ -208,15 +205,27 @@ void process_authorization_for_consumer(const uint8_t consumer_index)
         {
             int64_t timestamp_diff_ms = ((pdus[i].timestamp_us - prev_scanned_pdu.timestamp_us) / 1000);
             uint32_t adv_time_for_key_id = get_adv_interval_from_key_id(pdus[i].key_id);
-
             int64_t timestamp_diff_from_pdus = (int64_t) ((pdus[i].pdu_no - prev_scanned_pdu.pdu_no) * adv_time_for_key_id);
             
-            int64_t difference_timestamps = timestamp_diff_from_pdus - timestamp_diff_ms;
+            int difference_timestamps = (int) (timestamp_diff_from_pdus - timestamp_diff_ms);
 
-            if ( difference_timestamps <= TOLERANCE_WINDOW_MS && difference_timestamps >  (-1 * TOLERANCE_WINDOW_MS))
+            // ESP_LOGI(ADV_AUTHORIZE_LOG, "Expected adv time ms: %i", (int) adv_time_for_key_id);
+            // ESP_LOGI(ADV_AUTHORIZE_LOG, "Prev PDU NO: %i, Curr PDU NO: %i", (int) prev_scanned_pdu.pdu_no,(int) pdus[i].pdu_no);
+            // ESP_LOGI(ADV_AUTHORIZE_LOG, "Timestamp difference: %i", (int) difference_timestamps);
+            
+            const int PLUS_TOLERANCE_WINDOW_MS = get_tolerance_window_based_on_adv_interval(adv_time_for_key_id);
+            const int MINUS_TOLERANCE_WINDOW_MS = PLUS_TOLERANCE_WINDOW_MS * -1;
+            
+            // ESP_LOGI(ADV_AUTHORIZE_LOG, "Tolerance Window: %i i %i", (int) PLUS_TOLERANCE_WINDOW_MS, (int) MINUS_TOLERANCE_WINDOW_MS);
+
+            if ((difference_timestamps <= PLUS_TOLERANCE_WINDOW_MS) && (difference_timestamps >=  MINUS_TOLERANCE_WINDOW_MS))
             {
-                ESP_LOGI(ADV_AUTHORIZE_LOG, "Timestamp difference: %i", (int) difference_timestamps);
+                // ESP_LOGI(ADV_AUTHORIZE_LOG, "Interval has been authorized");
                 enqueue_pdu_for_processing(prev_scanned_pdu.data, prev_scanned_pdu.size, ao_control_structure.consumers[consumer_index].consumer_addr);
+            }
+            else
+            {
+                test_log_adv_time_not_authorize(ao_control_structure.consumers[consumer_index].consumer_addr);
             }
         }
         save_last_scanned_pdu(&prev_scanned_pdu, &pdus[i]);
@@ -224,6 +233,18 @@ void process_authorization_for_consumer(const uint8_t consumer_index)
 
     save_last_scanned_pdu(&(ao_control_structure.consumers[consumer_index].last_processed_pdu), &prev_scanned_pdu);
 
+}
+
+int get_tolerance_window_based_on_adv_interval(uint32_t adv_interval)
+{
+    if (adv_interval > 200)
+    {
+        return adv_interval * 0.1;
+    }
+    else
+    {
+        return adv_interval * 0.25;
+    }
 }
 
 void save_last_scanned_pdu(scan_pdu *prev_scanned_pdu, scan_pdu *pdu)

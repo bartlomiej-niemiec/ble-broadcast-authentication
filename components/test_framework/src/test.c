@@ -42,6 +42,7 @@ typedef struct {
     queue_fill_info deferred_queue;
     uint32_t no_bad_structure_packets;
     uint32_t wrongly_decoded_data_packets;
+    uint32_t unauthorize_packets;
 } test_consumer;
 
 typedef struct {
@@ -150,6 +151,7 @@ void reset_test_consumers_structure()
         ble_test_consumers[i].key_rec_data.key_reconstruction_end_ms = 0;
         ble_test_consumers[i].deferred_queue.no_checks = 0;
         ble_test_consumers[i].deferred_queue.total_fill = 0;
+        ble_test_consumers[i].unauthorize_packets = 0;
         memset(ble_test_consumers[i].mac_address, 0, sizeof(esp_bd_addr_t));
     }
 
@@ -348,6 +350,7 @@ void end_test_measurment()
                 ESP_LOGI(TEST_ESP_LOG_GROUP, "NO KEY RECONSTRUCTED: %i", (int) ble_test_consumers[i].no_reconstructed_keys);
                 ESP_LOGI(TEST_ESP_LOG_GROUP, "NO BAD STRUCTURE PACKETS: %i", (int) ble_test_consumers[i].no_bad_structure_packets);
                 ESP_LOGI(TEST_ESP_LOG_GROUP, "WRONGLY DECODED PACKETS: %i", (int) ble_test_consumers[i].wrongly_decoded_data_packets);
+                ESP_LOGI(TEST_ESP_LOG_GROUP, "UNAUTHORIZE INTERVAL PACKETS: %i", (int) ble_test_consumers[i].unauthorize_packets);
                 if (ble_test_consumers[i].deferred_queue.no_checks != 0)
                 {
                     double avarage_def_q_fill = ((double)((ble_test_consumers[i].deferred_queue.total_fill * 100) / ((double) ble_test_consumers[i].deferred_queue.no_checks)) );
@@ -378,6 +381,9 @@ void test_log_sender_key_replace_time_in_s(uint16_t key_replace_time_in_s)
 
 void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_address)
 {
+
+    ESP_LOGI(TEST_ESP_LOG_GROUP, "Packet has been received!");
+
     if (data == NULL || mac_address == NULL)
     {
         ESP_LOGE(TEST_ESP_LOG_GROUP, "Passed PDU Data or Mac Addrr is NULL");
@@ -525,4 +531,19 @@ void test_log_processing_queue_percentage(double percentage)
     ESP_LOGI(TEST_ESP_LOG_GROUP, "Sec Processing Queue Fill: %.2f", percentage * 100.0);
     consumer_sec_processing_queue.no_checks++;
     consumer_sec_processing_queue.total_fill += percentage;
+}
+
+void test_log_adv_time_not_authorize(esp_bd_addr_t addr)
+{
+    int index = -1;
+    if ((index = get_consumer_index(addr)) >= 0)
+    {
+        ble_test_consumers[index].unauthorize_packets++;
+    }
+    {
+        if ((index = add_consumer_to_table(addr)) >= 0)
+        {
+            ble_test_consumers[index].unauthorize_packets++;
+        }
+    }
 }

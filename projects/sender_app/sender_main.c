@@ -62,8 +62,8 @@ static uint8_t *test_payload_buffer_ptr = NULL;
 
 #define PDU_TO_KEY_FRAGMENT_RATIO 6
 
-static uint16_t pdu_send_counter = PDU_TO_KEY_FRAGMENT_RATIO;
-static uint32_t prev_key_id = 0;
+static volatile uint16_t pdu_send_counter = PDU_TO_KEY_FRAGMENT_RATIO;
+static volatile uint32_t prev_key_id = 0;
 
 uint16_t get_and_increment_pdu_send_counter()
 {
@@ -101,7 +101,7 @@ static esp_timer_create_args_t testTimeoutTimer = {
   .name = "TEST_TIMEOUT_TIMER",  
 };
 
-static uint32_t no_send_pdus = 0;
+static volatile uint32_t no_send_pdus = 0;
 
 void ble_sender_main();
 bool encrypt_new_payload();
