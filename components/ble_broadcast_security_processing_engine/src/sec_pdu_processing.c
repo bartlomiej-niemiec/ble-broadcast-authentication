@@ -176,11 +176,11 @@ void handle_event_new_pdu()
         {
             case DATA_CMD:
             {
-                ESP_LOGE(SEC_PDU_PROC_LOG, "Received data packet");
                 beacon_pdu_data pdu;
                 get_beacon_pdu_from_adv_data(&pdu, pduBatch[i].data, pduBatch[i].size);
                 uint16_t key_id = get_key_id_from_key_session_data(pdu.key_session_data);
                 key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
+                p_ble_consumer->last_pdu_key_id = key_id;
                 if (key == NULL || is_pdu_in_deferred_queue(p_ble_consumer) > 0)
                 {
                     add_to_consumer_deferred_queue(p_ble_consumer, &pdu);
@@ -194,11 +194,11 @@ void handle_event_new_pdu()
 
             case KEY_FRAGMENT_CMD:
             {
-                ESP_LOGE(SEC_PDU_PROC_LOG, "Received key fragment packet");
                 beacon_key_pdu_data * pdu = (beacon_key_pdu_data *) pduBatch[i].data;
                 uint16_t key_id = get_key_id_from_key_session_data(pdu->bcd.key_session_data);
                 uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pdu->bcd.key_session_data);
                 key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
+                p_ble_consumer->last_pdu_key_id = key_id;
                 if (key == NULL)
                 {
                     queue_key_for_reconstruction(key_id, key_fragment_index, 
@@ -265,23 +265,30 @@ void decrypt_pdu(const key_128b * const key, beacon_pdu_data * pdu, uint8_t * ou
 
 int process_deferred_queue(ble_consumer * p_ble_consumer)
 {
+    if (p_ble_consumer == NULL)
+    {
+        return -1;
+    }
+
     beacon_pdu_data pduBatch[MAX_PROCESSED_PDUS_AT_ONCE] = {0};
     int counter = 0;
-    while (get_deferred_queue_item(p_ble_consumer, &pduBatch[counter]) == pdTRUE && MAX_PROCESSED_PDUS_AT_ONCE > counter) {
+    while (counter < MAX_PROCESSED_PDUS_AT_ONCE && get_deferred_queue_item(p_ble_consumer, &(pduBatch[counter])) == pdTRUE) {
         counter++;
     }
     
+    if (counter == 0)
+        return -1;
+
     uint16_t last_key_id = get_key_id_from_key_session_data(pduBatch[0].key_session_data);
     const key_128b *key = get_key_from_cache(p_ble_consumer->context.key_cache, last_key_id);
 
     for (int i = 0; i < counter; i++)
     {
         uint16_t key_id = get_key_id_from_key_session_data(pduBatch[i].key_session_data);
-        uint8_t key_fragment_index = get_key_fragment_index_from_key_session_data(pduBatch[i].key_session_data);
 
         if (last_key_id != key_id)
         {
-            key = get_key_from_cache(p_ble_consumer->context.key_cache, key_fragment_index);
+            key = get_key_from_cache(p_ble_consumer->context.key_cache, key_id);
             last_key_id = key_id;
         }
 
@@ -291,8 +298,8 @@ int process_deferred_queue(ble_consumer * p_ble_consumer)
         }
         else
         {   
-            /// Drop PDU from removed key
-            if (key_id != p_ble_consumer->context.recently_removed_key_id)
+            // Drop PDU from removed key
+            if (key_id == p_ble_consumer->last_pdu_key_id)
             {
                 add_to_consumer_deferred_queue(p_ble_consumer, &pduBatch[i]);
             }

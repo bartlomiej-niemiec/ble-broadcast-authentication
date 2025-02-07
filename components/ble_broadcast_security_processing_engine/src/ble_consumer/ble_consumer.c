@@ -85,6 +85,7 @@ int init_ble_consumer(ble_consumer *p_ble_consumer) {
     p_ble_consumer->context.recently_removed_key_id = 0;
     p_ble_consumer->context.deferred_queue_count = 0;
     p_ble_consumer->rollover = 0;
+    p_ble_consumer->last_pdu_key_id = 0;
     memset(p_ble_consumer->mac_address_arr, 0, sizeof(p_ble_consumer->mac_address_arr));
 
     return init_key_cache(p_ble_consumer->context.key_cache) == 0 ? 0 : -1;

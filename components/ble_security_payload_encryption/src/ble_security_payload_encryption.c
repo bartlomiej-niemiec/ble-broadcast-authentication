@@ -41,7 +41,7 @@ uint16_t get_current_key_id()
 
 uint32_t get_time_interval_for_current_session_key()
 {
-    return get_adv_interval_from_key_id(get_key_id_from_key_session_data(get_current_key_id()));
+    return get_adv_interval_from_key_id(get_current_key_id());
 }
 
 void key_replacement_cb()
@@ -55,9 +55,8 @@ void key_replacement_cb()
     memcpy(&splitted_pre_shared_key, &next_splitted_pre_shared_key, sizeof(pre_shared_key));
 }
 
-uint16_t get_random_fragment_id()
-{
-    return (esp_random() % NO_KEY_FRAGMENTS);
+uint16_t get_random_key_id() {
+    return esp_random() & 0x3FFF;  // Mask to ensure range [0x0000, 0x3FFF]
 }
 
 uint16_t get_next_key_fragment()
@@ -77,11 +76,6 @@ uint16_t get_next_key_fragment()
 uint8_t get_random_time_interval_value()
 {
     return (esp_random() % MAX_TIME_INTERVAL_MULTIPLIER);
-}
-
-uint16_t get_random_key_id()
-{
-    return ((esp_random() % (USHRT_MAX - 1)) + 1);
 }
 
 bool init_payload_encryption()

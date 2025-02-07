@@ -41,7 +41,7 @@ bool get_beacon_pdu_from_adv_data(beacon_pdu_data * pdu, uint8_t *data, size_t s
     if (pdu == NULL || data == NULL)
         return false;
 
-    memcpy(pdu, data, size);
+    memcpy((void *) pdu, (void *) data, size);
     pdu->payload_size = get_payload_size_from_pdu(size);
     return true;
 }
@@ -60,7 +60,7 @@ command get_command_from_pdu(uint8_t *data, size_t size)
     {
         return 255;
     }
-    
+
     switch (data[COMMAND_OFFSET])
     {
         case DATA_CMD:
@@ -165,7 +165,7 @@ uint8_t get_key_exchange_counter(uint8_t key_exchange_data)
 
 size_t get_beacon_pdu_data_len(beacon_pdu_data * pdu)
 {
-    return (sizeof(pdu->key_session_data) + sizeof(pdu->marker) + pdu->payload_size + sizeof(pdu->cmd));
+    return (sizeof(pdu->key_session_data) + sizeof(pdu->pdu_no) + sizeof(pdu->xor_seed) + sizeof(pdu->marker) + pdu->payload_size + sizeof(pdu->cmd));
 }
 
 size_t get_beacon_key_pdu_data_len()
@@ -198,7 +198,7 @@ uint8_t produce_key_exchange_data(uint8_t pdu_time_interval_ms, uint8_t key_exch
 
 size_t get_payload_size_from_pdu(size_t total_pdu_len)
 {
-    return (total_pdu_len - (sizeof(uint16_t) + sizeof(command) + sizeof(uint16_t) + MARKER_STRUCT_SIZE));
+    return (total_pdu_len - (sizeof(uint16_t) + sizeof(command) + sizeof(uint8_t) + sizeof(uint16_t) + MARKER_STRUCT_SIZE));
 }
 
 uint32_t get_adv_interval_from_key_id(uint16_t key_id)
@@ -206,15 +206,15 @@ uint32_t get_adv_interval_from_key_id(uint16_t key_id)
     static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
     static const uint16_t MIN_KEY_ID_VAL = 0x0000;
 
-    // Scale key_id to the range of advertisement intervals
-    double raw_interval = MIN_ADV_TIME_MS + ((key_id * (MAX_ADV_TIME_MS - MIN_ADV_TIME_MS)) / (double)MAX_KEY_ID_VAL);
+    // Scale key_id to the range of advertisement intervals using floating-point arithmetic
+    double raw_interval = MIN_ADV_TIME_MS + ((double)key_id * ((double)(MAX_ADV_TIME_MS - MIN_ADV_TIME_MS) / (double)MAX_KEY_ID_VAL));
 
     // Round to the nearest multiple of 80ms
-    uint16_t rounded_interval = (uint16_t)(round((raw_interval - MIN_ADV_TIME_MS) / SCALE_SINGLE_MS) * SCALE_SINGLE_MS + MIN_ADV_TIME_MS);
+    uint32_t rounded_interval = (uint32_t)(round(raw_interval / SCALE_SINGLE_MS) * SCALE_SINGLE_MS);
 
     // Ensure the value is within bounds
     if (rounded_interval < MIN_ADV_TIME_MS) return MIN_ADV_TIME_MS;
     if (rounded_interval > MAX_ADV_TIME_MS) return MAX_ADV_TIME_MS;
-    
-    return (uint32_t) rounded_interval;
+
+    return rounded_interval;
 }

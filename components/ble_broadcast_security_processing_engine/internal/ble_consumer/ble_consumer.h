@@ -25,6 +25,7 @@ typedef struct {
     ble_consumer_context context;
     esp_bd_addr_t mac_address_arr;
     uint64_t last_pdu_timestamp;
+    uint16_t last_pdu_key_id;
     uint8_t rollover;
     SemaphoreHandle_t xMutex;
 } ble_consumer;

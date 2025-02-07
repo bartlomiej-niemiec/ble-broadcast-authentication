@@ -382,13 +382,12 @@ void test_log_sender_key_replace_time_in_s(uint16_t key_replace_time_in_s)
 void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_address)
 {
 
-    ESP_LOGI(TEST_ESP_LOG_GROUP, "Packet has been received!");
-
     if (data == NULL || mac_address == NULL)
     {
         ESP_LOGE(TEST_ESP_LOG_GROUP, "Passed PDU Data or Mac Addrr is NULL");
         return;
     }
+
     int index = -1;
     if ((index = get_consumer_index(mac_address)) >= 0)
     {

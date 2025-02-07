@@ -60,6 +60,24 @@ static uint8_t *test_payload_buffer_ptr = NULL;
 #define NO_PACKET_TO_SEND 2000
 #define TEST_NO_PACKETS_TO_KEY_REPLACE 200
 
+#define PDU_TO_KEY_FRAGMENT_RATIO 6
+
+static volatile uint16_t pdu_send_counter = PDU_TO_KEY_FRAGMENT_RATIO;
+static volatile uint32_t prev_key_id = 0;
+
+uint16_t get_and_increment_pdu_send_counter()
+{
+    uint16_t counter_value = pdu_send_counter;
+    if (pdu_send_counter == PDU_TO_KEY_FRAGMENT_RATIO)
+    {
+        pdu_send_counter = 0;   
+    }
+    else
+    {
+        pdu_send_counter++;
+    }
+    return counter_value;
+}
 
 static esp_ble_adv_params_t default_ble_adv_params = {
     .adv_int_min        = MS_TO_N_CONVERTION(ADV_INT_MIN_MS),
@@ -173,6 +191,7 @@ void sender_test_start_pdu(int * state);
 void sender_broadcast_pdu(int * state);
 void sender_test_end_pdu(int * state);
 bool encrypt_new_payload();
+bool encrypt_new_key_fragment();
 
 void ble_sender_main()
 {
@@ -254,7 +273,15 @@ void sender_broadcast_pdu(int *state)
         return;
     }
 
-    bool result = encrypt_new_payload();
+    bool result;
+    if (get_and_increment_pdu_send_counter() == PDU_TO_KEY_FRAGMENT_RATIO)
+    {
+        result = encrypt_new_key_fragment();
+    }
+    else
+    {
+        result = encrypt_new_payload();
+    }
     if (!result)
     {
         vTaskDelay(pdMS_TO_TICKS(current_random_interval_ms)); // Wait and continue the loop
@@ -284,7 +311,6 @@ void sender_test_end_pdu(int *state)
 
 bool encrypt_new_payload()
 {
-    static uint32_t prev_key_id = 0;
     packet_send_counter++;
     uint32_t PAYLOAD_LEN = TEST_PAYLOAD_BYTES_LEN;
     if (TEST_PAYLOAD_BYTES_LEN == RANDOM_SIZE)
@@ -340,5 +366,43 @@ bool encrypt_new_payload()
     }
 
     test_log_packet_send(pdu.payload, pdu.payload_size, NULL);
+    return true;
+}
+
+bool encrypt_new_key_fragment()
+{
+    packet_send_counter++;
+    beacon_key_pdu_data pdu = {0};
+    fill_marker_in_key_pdu(&pdu);
+
+    int encrypt_status = get_key_fragment_pdu(&pdu);
+    if (encrypt_status != 0)
+    {
+        ESP_LOGE(SENDER_APP_LOG_GROUP, "Failed to get key fragment, error code: %d", encrypt_status);
+        return false;
+    }
+    
+    if ( TEST_ADV_INTERVAL == INT_RANDOM && prev_key_id != get_current_key_id())
+    {
+        stop_broadcasting();
+        current_random_interval_ms = get_time_interval_for_current_session_key();
+        default_ble_adv_params.adv_int_min = MS_TO_N_CONVERTION(current_random_interval_ms);
+        default_ble_adv_params.adv_int_max = MS_TO_N_CONVERTION(current_random_interval_ms);
+        ESP_LOGI(SENDER_APP_LOG_GROUP, "New interval time %lu ms", current_random_interval_ms);
+        while (get_broadcast_state() != BROADCAST_CONTROLLER_BROADCASTING_NOT_RUNNING)
+        {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+
+        set_broadcasting_payload((uint8_t *)&pdu, get_beacon_key_pdu_data_len());
+        start_broadcasting(&default_ble_adv_params);
+        prev_key_id = get_current_key_id();
+    }
+    else
+    {
+        set_broadcasting_payload((uint8_t *)&pdu, get_beacon_key_pdu_data_len());
+    }
+
+    test_log_key_fragment_send();
     return true;
 }

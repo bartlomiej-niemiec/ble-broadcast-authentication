@@ -36,7 +36,7 @@ static char PC_SERIAL_BUFFER[MAX_SERIAL_MSG_SIZE] = {0};
 static const char* START_CMD_SERIAL = "START_TEST";
 static SemaphoreHandle_t xStartCmdReceived;
 static atomic_int EndTest = 0;
-static esp_timer_handle_t xTestTimeoutTimer;
+static esp_timer_handle_t xPacketSendTimeoutTimer;
 static uint64_t testTimeoutUs = TEST_DURATION_IN_S * 1e6;
 static uint8_t *test_payload_buffer_ptr = NULL;
 
@@ -44,6 +44,8 @@ static uint8_t *test_payload_buffer_ptr = NULL;
 
 #define TEST_PAYLOAD_BYTES_LEN PAYLOAD_10_BYTES
 #define TEST_ADV_INTERVAL INT_RANDOM
+
+#define START_TIME_US 2000000
 
 #define ADV_INT_MIN_MS TEST_ADV_INTERVAL
 #define ADV_INT_MAX_MS TEST_ADV_INTERVAL //ADV_INT_PLUS_10(TEST_ADV_INTERVAL)
@@ -60,7 +62,7 @@ static uint8_t *test_payload_buffer_ptr = NULL;
 #define NO_PACKET_TO_SEND 2000
 #define TEST_NO_PACKETS_TO_KEY_REPLACE 200
 
-#define PDU_TO_KEY_FRAGMENT_RATIO 6
+#define PDU_TO_KEY_FRAGMENT_RATIO 3
 
 static volatile uint16_t pdu_send_counter = PDU_TO_KEY_FRAGMENT_RATIO;
 static volatile uint32_t prev_key_id = 0;
@@ -90,26 +92,51 @@ static esp_ble_adv_params_t default_ble_adv_params = {
     };
 
 static volatile uint32_t current_random_interval_ms = ADV_INT_MIN_MS;
-
-void test_timeout_callback(void *arg)
-{
-   atomic_store(&EndTest, 1);
-}
-static esp_timer_create_args_t testTimeoutTimer = {
-  .callback = test_timeout_callback,
-  .arg = NULL, 
-  .name = "TEST_TIMEOUT_TIMER",  
-};
-
 static volatile uint32_t no_send_pdus = 0;
 
-void ble_sender_main();
+void sender_wair_for_start_cmd(int * state);
+void sender_test_start_pdu(int * state);
+void sender_broadcast_pdu(int * state);
+void sender_test_end_pdu(int * state);
 bool encrypt_new_payload();
 bool encrypt_new_key_fragment();
+void ble_sender_main();
 void data_set_success_cb()
 {
     no_send_pdus++;
 }
+
+
+void packet_send_timeout_timer(void *arg)
+{
+    int64_t timestamp_prev = esp_timer_get_time();
+
+    if (packet_send_counter >= NO_PACKET_TO_SEND)
+    {
+        return;
+    }
+
+    bool result;
+    if (get_and_increment_pdu_send_counter() == PDU_TO_KEY_FRAGMENT_RATIO)
+    {
+        result = encrypt_new_key_fragment();
+    }
+    else
+    {
+        result = encrypt_new_payload();
+    }
+
+    uint32_t delay_ms = get_time_interval_for_current_session_key();
+
+    uint64_t next_call_time = ((esp_timer_get_time() - timestamp_prev)) - (delay_ms * 1000);
+    esp_timer_start_once(xPacketSendTimeoutTimer, next_call_time);
+}
+
+static esp_timer_create_args_t packetSendTimeoutTimer = {
+  .callback = packet_send_timeout_timer,
+  .arg = NULL, 
+  .name = "PACKET_SEND_TIMEOUT_TIMER",  
+};
 
 void serial_data_received(uint8_t * data, size_t data_len)
 {
@@ -174,7 +201,7 @@ void app_main(void)
         return;
     xSemaphoreTake(xStartCmdReceived, MAX_BLOCK_TIME_SEMAPHORE_TICKS);
 
-    if (esp_timer_create(&testTimeoutTimer, &xTestTimeoutTimer) != ESP_OK)
+    if (esp_timer_create(&packetSendTimeoutTimer, &xPacketSendTimeoutTimer) != ESP_OK)
         return;
 
     if (init_controller == true)
@@ -195,12 +222,6 @@ void app_main(void)
         ESP_LOGE(SENDER_APP_LOG_GROUP, "Failed to init broadcast controller");
     }
 }
-
-void sender_wair_for_start_cmd(int * state);
-void sender_test_start_pdu(int * state);
-void sender_broadcast_pdu(int * state);
-void sender_test_end_pdu(int * state);
-bool encrypt_new_payload();
 
 void ble_sender_main()
 {
@@ -273,34 +294,20 @@ void sender_test_start_pdu(int *state)
     start_test_measurment(TEST_SENDER_ROLE);
     test_log_sender_data(TEST_PAYLOAD_BYTES_LEN, TEST_ADV_INTERVAL);
     ESP_LOGI(SENDER_APP_LOG_GROUP, "Changing state to broadcast pdus");
-    //esp_timer_start_once(xTestTimeoutTimer, testTimeoutUs);
+    esp_timer_start_once(xPacketSendTimeoutTimer, START_TIME_US);
     *state = SENDER_BROADCAST_PDU;
 }
 
 void sender_broadcast_pdu(int *state)
 {
+
     if (packet_send_counter >= NO_PACKET_TO_SEND)
     {
         *state = SENDER_TEST_END_PDU;
         return;
     }
 
-    bool result;
-    if (get_and_increment_pdu_send_counter() == PDU_TO_KEY_FRAGMENT_RATIO)
-    {
-        result = encrypt_new_key_fragment();
-    }
-    else
-    {
-        result = encrypt_new_payload();
-    }
-    if (!result)
-    {
-        vTaskDelay(pdMS_TO_TICKS(current_random_interval_ms)); // Wait and continue the loop
-        return;
-    }
-        
-    vTaskDelay(pdMS_TO_TICKS(current_random_interval_ms)); // Wait before sending the next payload
+    vTaskDelay(pdMS_TO_TICKS(100));  
 }
 
 void sender_test_end_pdu(int *state)
