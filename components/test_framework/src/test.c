@@ -34,6 +34,7 @@ typedef struct {
 
 typedef struct {
     esp_bd_addr_t mac_address;
+    SemaphoreHandle_t xMutex;
     uint32_t total_packets_received;
     double total_key_reconstruction_time;
     double avarage_key_reconstruction_time;
@@ -81,6 +82,15 @@ typedef struct {
 static const TickType_t TEST_QUEUE_WAIT_SYSTICKS = pdMS_TO_TICKS(50);
 
 static uint32_t counter = 0;
+
+void increment_received_packet_for_consumer(test_consumer * consumer)
+{
+    if (xSemaphoreTake(consumer->xMutex, TEST_SEMAPHORE_MAX_BLOCK_TIME_SYSTICK) == pdPASS)
+    {
+        consumer->total_packets_received++;
+        xSemaphoreGive(consumer->xMutex);
+    }
+}
 
 bool is_data_decoded_valid(uint8_t * data, size_t data_size)
 {
@@ -153,6 +163,12 @@ void reset_test_consumers_structure()
         ble_test_consumers[i].deferred_queue.total_fill = 0;
         ble_test_consumers[i].unauthorize_packets = 0;
         memset(ble_test_consumers[i].mac_address, 0, sizeof(esp_bd_addr_t));
+
+        ble_test_consumers[i].xMutex = xSemaphoreCreateMutex();
+        if (ble_test_consumers[i].xMutex == NULL)
+        {
+            ESP_LOGE(TEST_ESP_LOG_GROUP, "Failed to initialized Semaphore");
+        }
     }
 
     memset(ble_test_producer.mac_address, 0, sizeof(esp_bd_addr_t));
@@ -397,13 +413,16 @@ void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_
         }
         else
         {
-            ble_test_consumers[index].total_packets_received++;
+            increment_received_packet_for_consumer(&ble_test_consumers[index]);
+
             if (ble_test_consumers[index].total_packets_received % PACKET_CONST_COUNTER == 0)
             {
                 counter++;
                 ESP_LOG_BUFFER_HEX("TEST_LOG_GROUP: Sender addr", data, data_len);
                 ESP_LOGI(TEST_ESP_LOG_GROUP, "%lu Packet has been received!", (uint32_t) (counter * PACKET_CONST_COUNTER));
             }
+
+            
         }
     }
     else
@@ -416,7 +435,7 @@ void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_
             }
             else
             {
-                ble_test_consumers[index].total_packets_received++;
+                increment_received_packet_for_consumer(&ble_test_consumers[index]);
                 if (ble_test_consumers[index].total_packets_received % PACKET_CONST_COUNTER == 0)
                 {
                     counter++;
@@ -425,6 +444,15 @@ void test_log_packet_received(uint8_t *data, size_t data_len, esp_bd_addr_t mac_
                 }
             }
         }
+    }
+}
+
+void test_log_packet_received_key_fragment_already_decoded(esp_bd_addr_t mac_address)
+{
+    int index = -1;
+    if ((index = get_consumer_index(mac_address)) >= 0)
+    {
+        increment_received_packet_for_consumer(&ble_test_consumers[index]);
     }
 }
 

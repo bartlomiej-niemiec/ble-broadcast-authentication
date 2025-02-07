@@ -95,6 +95,10 @@ void handle_event_new_key_fragment_in_queue()
         {
             process_and_store_key_fragment(&keyFragmentBatch[i]);
         }
+        else
+        {
+            test_log_packet_received_key_fragment_already_decoded(keyFragmentBatch[i].consumer_mac_address);
+        }
 
         if (is_key_available(st_reconstructor_control.key_collection, keyFragmentBatch[i].consumer_mac_address, keyFragmentBatch[i].key_id) == true)
         {
@@ -233,6 +237,7 @@ RECONSTRUCTION_QUEUEING_STATUS queue_key_for_reconstruction(uint16_t key_id, uin
             }
             else
             {
+                test_log_packet_received_key_fragment_already_decoded(consumer_mac_address);
                 ESP_LOGE(REC_LOG_GROUP, "Key fragment %i is already decrypted", key_fragment_no);
             }
         }
@@ -259,6 +264,7 @@ void process_and_store_key_fragment(reconstructor_queue_element * q_element)
     if (crypto_secure_memcmp(calculated_hmac_buffer, q_element->key_hmac, sizeof(calculated_hmac_buffer)) == 0)
     {
         add_fragment_to_key_management(st_reconstructor_control.key_collection, q_element->consumer_mac_address, q_element->key_id, decrypted_key_fragment_buffer, q_element->key_fragment_no);
+        test_log_packet_received_key_fragment_already_decoded(q_element->consumer_mac_address);
         ESP_LOGI(REC_LOG_GROUP, "Successfully reconstructed key fragment no: %i", q_element->key_fragment_no);
     }
     else

@@ -64,4 +64,6 @@ void test_log_bad_structure_packet(esp_bd_addr_t addr);
 
 void test_log_adv_time_not_authorize(esp_bd_addr_t addr);
 
+void test_log_packet_received_key_fragment_already_decoded(esp_bd_addr_t mac_address);
+
 #endif
