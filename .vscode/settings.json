@@ -65,6 +65,15 @@
         "beacon_test_pdu.h": "c",
         "tasks_data.C": "cpp",
         "typeinfo": "c",
-        "test.h": "c"
+        "test.h": "c",
+        "beacon_crypto_data.h": "c",
+        "sec_pdu_process_queue.h": "c",
+        "sec_pdu_processing_queue.h": "c",
+        "sec_pdu_processing_scan_callback.h": "c",
+        "memory": "c",
+        "future": "c",
+        "istream": "c",
+        "tuple": "c",
+        "utility": "c"
     }
 }

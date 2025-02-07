@@ -8,17 +8,61 @@ beacon_marker my_marker = {
     .marker = {0xFF, 0x8, 0x0}
 };
 
-esp_err_t build_beacon_pdu_data (beacon_crypto_data *crypto, uint8_t* payload, size_t payload_size, beacon_pdu_data *bpd)
+esp_err_t build_beacon_pdu_data (uint16_t key_session_data, uint8_t* payload, size_t payload_size, beacon_pdu_data *bpd)
 {
-    if ((crypto == NULL) || (payload == NULL || payload_size > MAX_PDU_PAYLOAD_SIZE) || (bpd == NULL)){
+    if ((payload == NULL || payload_size > MAX_PDU_PAYLOAD_SIZE) || (bpd == NULL)){
         return ESP_ERR_INVALID_ARG;
     }
 
     memcpy(&(bpd->marker), &my_marker, sizeof(beacon_marker));
-    memcpy(&(bpd->bcd), crypto, sizeof(beacon_crypto_data));
+    bpd->cmd = DATA_CMD;
+    bpd->key_session_data = key_session_data;
     memcpy(&(bpd->payload), payload, payload_size);
 
     return ESP_OK;
+}
+
+esp_err_t build_beacon_key_pdu_data (beacon_crypto_data* bcd, beacon_key_pdu_data *bpd)
+{
+    if ((bcd == NULL) || (bpd == NULL)){
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memcpy(&(bpd->marker), &my_marker, sizeof(beacon_marker));
+    memcpy(&(bpd->bcd), bcd, sizeof(beacon_crypto_data));
+    bpd->cmd = KEY_FRAGMENT_CMD;
+
+    return ESP_OK;
+}
+
+command get_command_from_pdu(uint8_t *data, size_t size)
+{
+    command cmd = 255;
+    
+    if (size < COMMAND_OFFSET)
+        return 255;
+
+    switch (data[COMMAND_OFFSET])
+    {
+        case DATA_CMD:
+        {
+            cmd = DATA_CMD;
+        }
+        break;
+
+
+        case KEY_FRAGMENT_CMD:
+        {
+            cmd = KEY_FRAGMENT_CMD;
+        }
+        break;
+
+
+        default:
+            break;
+    }
+
+    return cmd;
 }
 
 bool is_pdu_in_beacon_pdu_format(uint8_t *data, size_t size) 
@@ -92,7 +136,7 @@ uint8_t get_key_exchange_counter(uint8_t key_exchange_data)
 
 size_t get_beacon_pdu_data_len(beacon_pdu_data * pdu)
 {
-    return (sizeof(pdu->bcd) + sizeof(pdu->marker) + pdu->payload_size);
+    return (sizeof(pdu->key_session_data) + sizeof(pdu->marker) + pdu->payload_size + sizeof(pdu->cmd));
 }
 
 uint16_t produce_key_session_data(uint16_t key_id, uint8_t key_fragment)
@@ -120,5 +164,14 @@ uint8_t produce_key_exchange_data(uint8_t pdu_time_interval_ms, uint8_t key_exch
 
 size_t get_payload_size_from_pdu(size_t total_pdu_len)
 {
-    return (total_pdu_len - (CRYPT_DATA_SIZE + MARKER_STRUCT_SIZE));
+    return (total_pdu_len - (sizeof(uint16_t) + sizeof(command) + MARKER_STRUCT_SIZE + sizeof(uint16_t)));
+}
+
+uint32_t get_adv_interval_from_key_id(uint16_t key_id)
+{
+    static const uint16_t MAX_KEY_ID_VAL = 0x3FFF;
+    static const uint16_t MIN_KEY_ID_VAL = 0x0000;
+
+
+    
 }

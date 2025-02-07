@@ -3,6 +3,7 @@
 #include "beacon_pdu_data.h"
 #include "sec_payload_observer_collection.h"
 #include "sec_pdu_processing.h"
+#include "sec_pdu_process_queue.h"
 #include "key_reconstructor.h"
 #include "key_cache.h"
 #include "crypto.h"
@@ -58,7 +59,8 @@ static sec_pdu_processing_control sec_pdu_st = {
 };
 
 typedef struct {
-    beacon_pdu_data pdu;
+    uint8_t* data;
+    size_t size;
     esp_bd_addr_t mac_address;
 } beacon_pdu_data_with_mac_addr;
 
@@ -457,16 +459,17 @@ int start_up_sec_processing()
 }
 
 
-int enqueue_pdu_for_processing(beacon_pdu_data* pdu, esp_bd_addr_t mac_address)
+int enqueue_pdu_for_processing(uint8_t* data, size_t size, esp_bd_addr_t mac_address)
 {
     BaseType_t stats = pdFAIL;
 
     if (sec_pdu_st.is_sec_pdu_processing_initialised == true)
     {   
-        if (pdu != NULL && mac_address != NULL)
+        if (data != NULL && mac_address != NULL)
         {
             beacon_pdu_data_with_mac_addr temp_pdu;
-            memcpy(&(temp_pdu.pdu), pdu, sizeof(beacon_pdu_data));
+            memcpy(&(temp_pdu.data), data, size);
+            temp_pdu.size = size;
             memcpy(temp_pdu.mac_address, mac_address, sizeof(esp_bd_addr_t));
             stats = xQueueSend(sec_pdu_st.processingQueue, ( void * ) &temp_pdu, QUEUE_TIMEOUT_SYS_TICKS);
             if (stats)
