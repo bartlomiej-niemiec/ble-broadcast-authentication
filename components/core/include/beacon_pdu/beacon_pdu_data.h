@@ -10,8 +10,8 @@
 
 typedef uint8_t command;
 
-#define MIN_ADV_TIME_MS 200
-#define MAX_ADV_TIME_MS 1000
+#define MIN_ADV_TIME_MS 3000
+#define MAX_ADV_TIME_MS 5000
 #define SCALE_SINGLE_MS 80
 
 #define MAX_GAP_DATA_LEN 31

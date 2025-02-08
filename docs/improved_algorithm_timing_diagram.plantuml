@@ -1,0 +1,103 @@
+@startuml
+Title "Wysyłanie pakietów przez nadawce"
+
+binary  "Pakiety Danych"  as D
+binary  "Pakiety Fragmentów Klucza"  as K
+
+@0
+D is low
+K is low
+
+@1
+D is high
+
+@1.1
+D is low
+
+@2
+D is high
+
+@2.1
+D is low
+
+@3
+D is high
+
+@3.1
+D is low
+
+@4
+D is high
+
+@4.1
+D is low
+
+@5
+K is high
+
+@5.1
+K is low
+
+@6
+D is high
+
+@6.1
+D is low
+
+@7
+D is high
+
+@7.1
+D is low
+
+@8
+D is high
+
+@8.1
+D is low
+
+@9
+D is high
+
+@9.1
+D is low
+
+@10
+K is high
+
+@10.1
+K is low
+
+@11
+D is high
+
+@11.1
+D is low
+
+@12
+D is high
+
+@12.1
+D is low
+
+@13
+D is high
+
+@13.1
+D is low
+
+@14
+D is high
+
+@14.1
+D is low
+
+@15
+K is high
+
+@15.1
+K is low
+
+K@1 <-> @5.1 : Co n-ty pakiet wysyłany jest fragment klucza
+highlight 1 to 5.1 #Gold;line:DimGrey
+@enduml

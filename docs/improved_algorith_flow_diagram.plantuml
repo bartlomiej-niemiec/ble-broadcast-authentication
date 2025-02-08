@@ -1,0 +1,53 @@
+@startuml
+top to bottom direction
+control Control  as "Odbiór pakietów"
+
+package "Silnik przetwarzania odebranych PDU" {
+
+    package "Autoryzacja interwału rozgłaszania" #line:orange; {
+        queue       Queue1       as "Kolejka pakietów pierwszego nadawcy"
+        queue       Queue2       as "Kolejka pakietów n-tego nadawcy"
+        control     Control1  as "Autoryzacja interwału"
+    }
+
+
+    package "Procesor PDU" #line:red;{
+        queue       Queue3       as "Kolejka procesora"
+        control     Control2     as "Przetwarzanie pakietów"
+        note right of Control2
+            Jeżeli kolejka odroczonych pakietów nie jest pusta to przetwórz.
+            Jeżeli pakiet z danymi i jest klucz zdekoduj.
+            Jeżeli pakiet z danymi i nie ma klucza to dodaj do kolejki odroczonych pakietów.
+            Jeżeli pakiet z fragmentem klucza i klucz nie zrekonstruowany zleć rekonstrukcje.
+            Jeżeli pakiet z fragmentem i jest klucz to zignoruj pakiet.
+        end note
+    }
+
+    package "Rekonstruktor Klucza" #line:blue; {
+        queue       Queue4       as "Kolejka fragmentów klucza"
+        control     Control3     as "Rekonstrukcja klucza"
+    }
+
+    database "Baza danych aktywnych nadawców" #line:green; {
+      folder "Adresy MAC" {
+      }
+      frame "Kolekcja kluczy sesji" {
+      }
+      frame "Kolejki odroczonych pakietów dla nadawców" {
+      }
+    }
+
+}
+
+Control --> "Autoryzacja interwału rozgłaszania" #line:black;line.bold;text:black
+Queue1 --> Control1
+Queue2 --> Control1
+Control1 --> Queue3 #line:orange;line.bold;text:orange : przekaż zautoryzowane pakiety
+Queue3 --> Control2
+Control2 -down-> Queue4 #line:red;line.bold;text:red : zleć rekonstrukcję
+Queue4 -down-> Control3
+Control3 -up-> "Procesor PDU" #line:blue;line.bold;text:blue : poinformuj o zakończeniu rekonstrukcji
+Control2 -down-> "Baza danych aktywnych nadawców" #line:red;line.bold;text:red : pobierz klucz
+Control2 -down-> "Baza danych aktywnych nadawców" #line:red;line.bold;text:red : dodaj pakiet danych do kolejki odroczonych pakietów
+Control3 -down-> "Baza danych aktywnych nadawców" #line:blue;line.bold;text:blue : dodaj klucz
+@enduml
