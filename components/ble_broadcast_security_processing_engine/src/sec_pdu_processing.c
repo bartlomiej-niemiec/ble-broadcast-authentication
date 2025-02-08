@@ -205,6 +205,10 @@ void handle_event_new_pdu()
                         pdu->bcd.enc_key_fragment, pdu->bcd.key_fragment_hmac, 
                         pdu->bcd.xor_seed, pduBatch[i].mac_address);
                 }
+                else
+                {
+                    test_log_packet_received_key_fragment_already_decoded(p_ble_consumer->mac_address_arr);
+                }
             }
             break;
 

@@ -92,6 +92,15 @@ void increment_received_packet_for_consumer(test_consumer * consumer)
     }
 }
 
+void increment_unauthorize_packet_for_consumer(test_consumer * consumer)
+{
+    if (xSemaphoreTake(consumer->xMutex, TEST_SEMAPHORE_MAX_BLOCK_TIME_SYSTICK) == pdPASS)
+    {
+        consumer->unauthorize_packets++;
+        xSemaphoreGive(consumer->xMutex);
+    }
+}
+
 bool is_data_decoded_valid(uint8_t * data, size_t data_size)
 {
     bool is_data_decoded_valid = false;
@@ -314,20 +323,20 @@ void init_task_resources()
         return;
     }
 
-    int result = xTaskCreate(
-        test_receiver_app_main,
-        "RECEIVER TEST TASK",
-        RECEIVER_TEST_TASK_STACK_SIZE,
-        NULL,
-        14,
-        &xTestPacketsTask
-    );
+    // int result = xTaskCreate(
+    //     test_receiver_app_main,
+    //     "RECEIVER TEST TASK",
+    //     RECEIVER_TEST_TASK_STACK_SIZE,
+    //     NULL,
+    //     14,
+    //     &xTestPacketsTask
+    // );
 
-    if (xTestPacketsTask == NULL || result != pdPASS)
-    {
-        ESP_LOGE(TEST_ESP_LOG_GROUP, "Failed to initialized test receiver task");
-        return;
-    }
+    // if (xTestPacketsTask == NULL || result != pdPASS)
+    // {
+    //     ESP_LOGE(TEST_ESP_LOG_GROUP, "Failed to initialized test receiver task");
+    //     return;
+    // }
 }
 
 void start_test_measurment(TEST_ROLE role)
@@ -453,6 +462,11 @@ void test_log_packet_received_key_fragment_already_decoded(esp_bd_addr_t mac_add
     if ((index = get_consumer_index(mac_address)) >= 0)
     {
         increment_received_packet_for_consumer(&ble_test_consumers[index]);
+        if (ble_test_consumers[index].total_packets_received % PACKET_CONST_COUNTER == 0)
+        {
+            counter++;
+            ESP_LOGI(TEST_ESP_LOG_GROUP, "%lu Packet has been received!", (uint32_t) (counter * PACKET_CONST_COUNTER));
+        }
     }
 }
 
@@ -565,12 +579,12 @@ void test_log_adv_time_not_authorize(esp_bd_addr_t addr)
     int index = -1;
     if ((index = get_consumer_index(addr)) >= 0)
     {
-        ble_test_consumers[index].unauthorize_packets++;
+        increment_unauthorize_packet_for_consumer(&(ble_test_consumers[index]));
     }
     {
         if ((index = add_consumer_to_table(addr)) >= 0)
         {
-            ble_test_consumers[index].unauthorize_packets++;
+            increment_unauthorize_packet_for_consumer(&(ble_test_consumers[index]));
         }
     }
 }

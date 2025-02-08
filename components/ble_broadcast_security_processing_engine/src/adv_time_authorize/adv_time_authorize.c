@@ -20,11 +20,13 @@
 #define EVENT_QUEUE_SIZE 10
 
 #define MAX_PDU_PROCESS_PER_CONSUMER 6
-#define NO_PDU_IN_QUEUE_FOR_PROCESS 2
+#define NO_PDU_IN_QUEUE_FOR_PROCESS 6
 
 #define MAX_BLOCK_TIME_TICKS pdMS_TO_TICKS(50)
 
 #define ADV_AUTHORIZE_LOG "ADV_AUTHRORIZE"
+
+#define EVENT_AUTHORIZE_PACKETS (1 << 1)
 
 typedef struct {
     int64_t timestamp_us;
@@ -40,12 +42,14 @@ typedef struct {
     QueueHandle_t privateQueue;
     uint16_t last_pdu_no;
     uint16_t last_pdu_key_id;
+    bool active;
 } consumer_authorization_structure;
 
 typedef struct {
     consumer_authorization_structure consumers[MAX_BLE_CONSUMERS];
     SemaphoreHandle_t xMutex;
     TaskHandle_t xTaskHandle;
+    EventGroupHandle_t eventGroup;
 } adv_time_authorize_structure;
 
 static adv_time_authorize_structure ao_control_structure;
@@ -96,6 +100,12 @@ bool init_adv_time_authorize_object()
             return is_initialized_alread;
         }
 
+        ao_control_structure.eventGroup = xEventGroupCreate();
+        if (ao_control_structure.eventGroup == NULL)
+        {
+            ESP_LOGI(ADV_AUTHORIZE_LOG, "Event group alloc failed");
+            return is_initialized_alread;
+        }
 
         BaseType_t  taskCreateResult = xTaskCreatePinnedToCore(
             adv_authorize_main,
@@ -144,6 +154,7 @@ int get_consumer_index_for_addr(esp_bd_addr_t mac_address)
     if (index == -1 && free_arr_index >= 0)
     {
         memcpy(ao_control_structure.consumers[free_arr_index].consumer_addr, mac_address, sizeof(esp_bd_addr_t));
+        ao_control_structure.consumers[free_arr_index].active = true;
         index = free_arr_index;
     }
 
@@ -158,20 +169,25 @@ uint32_t get_no_messages_in_queue(QueueHandle_t queue)
 
 void adv_authorize_main(void *arg)
 {
-    const uint32_t DELAY_MS = 25;
+    const uint32_t DELAY_TICKS = pdMS_TO_TICKS(20);
     while(1)
     {
-        for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
+        // Wait for events: either a new PDU or key reconstruction completion
+        EventBits_t events = xEventGroupWaitBits(ao_control_structure.eventGroup,
+                EVENT_AUTHORIZE_PACKETS,
+                pdTRUE, pdFALSE, portMAX_DELAY);
+
+        if (events &EVENT_AUTHORIZE_PACKETS)
         {
-            uint32_t no_messages_in_queue = get_no_messages_in_queue(ao_control_structure.consumers[i].privateQueue);
-            if (no_messages_in_queue >= NO_PDU_IN_QUEUE_FOR_PROCESS)
+            for (int i = 0; i < MAX_BLE_CONSUMERS; i++)
             {
-                process_authorization_for_consumer(i);
-                vTaskDelay(pdMS_TO_TICKS(DELAY_MS));
+                if (ao_control_structure.consumers[i].active == true)
+                {
+                    process_authorization_for_consumer(i);
+                    vTaskDelay(DELAY_TICKS);
+                }
             }
         }
-
-        vTaskDelay(pdMS_TO_TICKS(DELAY_MS));
     }
 
 }
@@ -235,9 +251,21 @@ void process_authorization_for_consumer(const uint8_t consumer_index)
 
 int get_tolerance_window_based_on_adv_interval(uint32_t adv_interval)
 {
-    if (adv_interval > 200)
+    if (adv_interval >= 3000)
+    {
+        return adv_interval * 0.05;
+    }
+    else if (adv_interval >= 1000)
+    {
+        return adv_interval * 0.1;
+    }
+    else if (adv_interval > 500)
     {
         return adv_interval * 0.15;
+    }
+    else if (adv_interval > 200)
+    {
+        return adv_interval * 0.20;
     }
     else
     {
@@ -278,6 +306,12 @@ void scan_complete_callback(int64_t timestamp_us, uint8_t *data, size_t data_siz
                             ESP_LOGE(ADV_AUTHORIZE_LOG, "Failed add to queue! :(");
                         }
                         ao_control_structure.consumers->last_pdu_no = pdu.pdu_no;
+
+                        uint32_t no_messages_in_queue = get_no_messages_in_queue(ao_control_structure.consumers[consumer_index].privateQueue);
+                        if (no_messages_in_queue >= NO_PDU_IN_QUEUE_FOR_PROCESS)
+                        {
+                            xEventGroupSetBits(ao_control_structure.eventGroup, EVENT_AUTHORIZE_PACKETS);
+                        }
                     }
                 }
                 else
@@ -289,6 +323,12 @@ void scan_complete_callback(int64_t timestamp_us, uint8_t *data, size_t data_siz
                     }
                     ao_control_structure.consumers->last_pdu_no = pdu.pdu_no;
                     ao_control_structure.consumers->last_pdu_key_id = pdu.key_id;
+
+                    uint32_t no_messages_in_queue = get_no_messages_in_queue(ao_control_structure.consumers[consumer_index].privateQueue);
+                    if (no_messages_in_queue >= NO_PDU_IN_QUEUE_FOR_PROCESS)
+                    {
+                        xEventGroupSetBits(ao_control_structure.eventGroup, EVENT_AUTHORIZE_PACKETS);
+                    }
                 }
 
             }
