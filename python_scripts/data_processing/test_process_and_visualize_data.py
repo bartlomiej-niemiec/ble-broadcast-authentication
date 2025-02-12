@@ -114,6 +114,7 @@ def plot_packet_losses(packet_loss_4bytes, packet_loss_10bytes, packet_loss_16by
     # To load the display window
     plt.show()
 
+
 def plot_packet_losses_multiple_senders(packet_loss_data):
     x_points_adv_intervals = np.array([20, 50, 100, 300, 500, 1000])
 
@@ -140,6 +141,7 @@ def plot_packet_losses_multiple_senders(packet_loss_data):
     # To load the display window
     plt.show()
 
+
 def plot_dq_fill_strategies(dq_data):
     x_points_adv_intervals = np.array([20, 50, 100, 300, 500, 1000])
 
@@ -150,15 +152,18 @@ def plot_dq_fill_strategies(dq_data):
         y_sender_a.append(data.random_key_fragment_selection)
         y_sender_b.append(data.sequence_key_fragment_selection)
 
-    plt.scatter(x_points_adv_intervals, y_sender_a, color='b', marker="+", linewidth=5, label='Fragmenty klucza wybierane losowo')
-    plt.scatter(x_points_adv_intervals, y_sender_b, color='r', marker="+", linewidth=5, label='Fragmenty klucza wybierane szeregowo')
+    plt.scatter(x_points_adv_intervals, y_sender_a, color='b', marker="+", linewidth=5,
+                label='Fragmenty klucza wybierane losowo')
+    plt.scatter(x_points_adv_intervals, y_sender_b, color='r', marker="+", linewidth=5,
+                label='Fragmenty klucza wybierane szeregowo')
 
     # Naming the x-axis, y-axis and the whole graph
     plt.xticks(np.arange(0, 1050, step=50))  # Set label locations.
     plt.grid()
     plt.xlabel("Interwał rozgłaszania danych [ms]")
     plt.ylabel("Zajętość kolejki odroczonych pakietów [%]")
-    plt.title("Badanie zmiany procentowej zajętości kolejki odroczonych pakietów dla różnych strategii wyboru fragmentów klucza")
+    plt.title(
+        "Badanie zmiany procentowej zajętości kolejki odroczonych pakietów dla różnych strategii wyboru fragmentów klucza")
 
     # Adding legend, which helps us recognize the curve according to it's color
     plt.legend()
@@ -179,7 +184,7 @@ def plot_packet_losses_dynamics(packet_loss_range_dynamic):
         for data in packet_loss_range_dynamic:
             if data.sender_advertising_interval_min == start_values[i_start]:
                 y_points_packet_losses.append(data.get_packet_loss())
-                i_start +=1
+                i_start += 1
 
     plt.bar(x_points_adv_intervals, y_points_packet_losses)
     plt.title('Utrata pakietów dla dynamicznego czasu rozgłaszania z danego zakresu')
@@ -188,6 +193,7 @@ def plot_packet_losses_dynamics(packet_loss_range_dynamic):
     plt.legend()
     plt.grid()
     plt.show()
+
 
 def plot_packet_losses_dynamics_multiple_senders(packet_loss_range_dynamic):
     x_points_adv_intervals = ["20-200ms", "200-1000ms", "1000-3000ms", "3000-5000ms"]
@@ -203,12 +209,12 @@ def plot_packet_losses_dynamics_multiple_senders(packet_loss_range_dynamic):
             if data[0].sender_advertising_interval_min == start_values[i_start]:
                 y_points_packet_losses_a.append(data[0].get_packet_loss())
                 y_points_packet_losses_b.append(data[1].get_packet_loss())
-                i_start +=1
+                i_start += 1
 
     X_axis = np.arange(len(x_points_adv_intervals))
 
     plt.bar(X_axis - 0.2, y_points_packet_losses_a, 0.4, label="Nadawca A")
-    plt.bar(X_axis + 0.2, y_points_packet_losses_b, 0.4,  label="Nadawca B")
+    plt.bar(X_axis + 0.2, y_points_packet_losses_b, 0.4, label="Nadawca B")
 
     plt.title('Utrata pakietów dla dynamicznego czasu rozgłaszania z danego zakresu')
     plt.xlabel('Zakres interwału rozgłaszania [ms]')
@@ -218,6 +224,59 @@ def plot_packet_losses_dynamics_multiple_senders(packet_loss_range_dynamic):
     plt.legend()
     plt.grid()
     plt.show()
+
+def plot_improved_algorithm_packet_losses_dynamics(packet_loss_range_dynamic):
+    x_points_adv_intervals = ["20-200ms", "200-1000ms", "1000-3000ms", "3000-5000ms"]
+
+    start_values = [20, 200, 1000, 3000]
+
+    y_points_packet_losses = []
+
+    i_start = 0
+    while i_start != len(start_values):
+        for data in packet_loss_range_dynamic:
+            if data.sender_advertising_interval_min == start_values[i_start]:
+                y_points_packet_losses.append(data.get_packet_loss())
+                i_start += 1
+
+    plt.bar(x_points_adv_intervals, y_points_packet_losses)
+    plt.title('Utrata pakietów dla dynamicznego czasu rozgłaszania z danego zakresu')
+    plt.xlabel('Zakres interwału rozgłaszania [ms]')
+    plt.ylabel('Utrata pakietów [%]')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+def plot_improved_algorithm_packet_losses_dynamics_multiple_senders(packet_loss_range_dynamic):
+    x_points_adv_intervals = ["20-200ms", "200-1000ms", "1000-3000ms", "3000-5000ms"]
+
+    start_values = [20, 200, 1000, 3000]
+
+    y_points_packet_losses_a = []
+    y_points_packet_losses_b = []
+
+    i_start = 0
+    while i_start != len(start_values):
+        for data in packet_loss_range_dynamic:
+            if data[0].sender_advertising_interval_min == start_values[i_start]:
+                y_points_packet_losses_a.append(data[0].get_packet_loss())
+                y_points_packet_losses_b.append(data[1].get_packet_loss())
+                i_start += 1
+
+    X_axis = np.arange(len(x_points_adv_intervals))
+
+    plt.bar(X_axis - 0.2, y_points_packet_losses_a, 0.4, label="Nadawca A")
+    plt.bar(X_axis + 0.2, y_points_packet_losses_b, 0.4, label="Nadawca B")
+
+    plt.title('Utrata pakietów dla dynamicznego czasu rozgłaszania z danego zakresu')
+    plt.xlabel('Zakres interwału rozgłaszania [ms]')
+    plt.ylabel('Utrata pakietów [%]')
+
+    plt.xticks(X_axis + 0.2 / 2, ["20-200ms", "200-1000ms", "1000-3000ms", "3000-5000ms"])
+    plt.legend()
+    plt.grid()
+    plt.show()
+
 
 def print_packet_loss_tables_dynamic_multiple(packet_loss_dynamics_data):
     table_20_200ms = PrettyTable()
@@ -260,7 +319,6 @@ def print_packet_loss_tables_dynamic_multiple(packet_loss_dynamics_data):
     print(table_200_1000ms)
     print(table_1000_3000ms)
     print(table_3000_5000ms)
-
 
 
 def plot_key_reconstruction_average_time(adv_time_20ms, adv_time_50ms, adv_time_100ms, adv_time_300ms, adv_time_500ms,
@@ -422,6 +480,7 @@ def print_packet_loss_tables(packet_loss_4bytes, packet_loss_10bytes, packet_los
     print(table_500ms)
     print(table_1000ms)
 
+
 def print_packet_loss_tables_dynamic(packet_loss_dynamics_data):
     table_20_200ms = PrettyTable()
     table_20_200ms.field_names = ["Adv. Interval[ms]", "Packet Loss[%]"]
@@ -455,6 +514,7 @@ def print_packet_loss_tables_dynamic(packet_loss_dynamics_data):
     print(table_200_1000ms)
     print(table_1000_3000ms)
     print(table_3000_5000ms)
+
 
 def print_packet_loss_tables_multiple_senders(packet_loss_data):
     table_20ms = PrettyTable()
@@ -507,7 +567,6 @@ def print_packet_loss_tables_multiple_senders(packet_loss_data):
             table_1000ms.add_row(
                 ["Sender B 1000 [ms]", data[1].get_packet_loss()])
 
-
     print(table_20ms)
     print(table_50ms)
     print(table_100ms)
@@ -517,8 +576,8 @@ def print_packet_loss_tables_multiple_senders(packet_loss_data):
 
 
 if __name__ == "__main__":
-    plot_packet_losses_dynamics_multiple_senders(results.MULTIPLE_SENDERS_DYNAMICS)
-    print_packet_loss_tables_dynamic_multiple(results.MULTIPLE_SENDERS_DYNAMICS)
+    # plot_packet_losses_dynamics_multiple_senders(results.MULTIPLE_SENDERS_DYNAMICS)
+    # print_packet_loss_tables_dynamic_multiple(results.MULTIPLE_SENDERS_DYNAMICS)
     # #GET PACKET LOSSES
     # PACKET_LOSS_4_BYTES, PACKET_LOSS_10_BYTES, PACKET_LOSS_16_BYTES = get_packet_losses()
     #
@@ -582,3 +641,7 @@ if __name__ == "__main__":
     # print_packet_loss_tables_dynamic(results.DYNAMIC_TESTS_RESULTS)
     # print("============PACKET LOSS MULTIPLE RECEIVERS============")
     # print_packet_loss_tables_multiple_senders(results.MULTIPLE_SENDERS_RESULTS)
+
+    plot_improved_algorithm_packet_losses_dynamics(results.IMPROVED_ALGORITHM_DYNAMIC_TESTS_RESULTS)
+
+    plot_improved_algorithm_packet_losses_dynamics_multiple_senders(results.IMPROVED_ALGORITHM_MULTIPLE_SENDERS_DYNAMICS)

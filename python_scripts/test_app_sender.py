@@ -15,8 +15,8 @@ SERIAL_PORT_CONFIG = {
 FILENAME = "test_sender_algorithm_v2"
 TIMESTR = time.strftime("%Y%m%d_%H%M%S")
 PAYLOAD_SIZE = "10_bytes"
-INTERVAL = "based_on_key_id_3000_5000"
-DETAILS = "03_15"
+INTERVAL = "based_on_key_id_20_200"
+DETAILS = "multiple"
 LOGFILEPATH = FILENAME + "_" + TIMESTR + "_" + DETAILS + "_" + PAYLOAD_SIZE + "_" + INTERVAL + "ms" + ".txt"
 
 MAX_Q_SIZE = 20

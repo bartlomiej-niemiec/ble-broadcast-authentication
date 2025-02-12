@@ -10,9 +10,9 @@
 
 typedef uint8_t command;
 
-#define MIN_ADV_TIME_MS 3000
-#define MAX_ADV_TIME_MS 5000
-#define SCALE_SINGLE_MS 80
+#define MIN_ADV_TIME_MS 20
+#define MAX_ADV_TIME_MS 200
+#define SCALE_SINGLE_MS 20
 
 #define MAX_GAP_DATA_LEN 31
 #define MAX_PDU_PAYLOAD_SIZE (MAX_GAP_DATA_LEN - (sizeof(uint16_t)) - (MARKER_STRUCT_SIZE) - (sizeof(command) - sizeof(uint16_t)))
